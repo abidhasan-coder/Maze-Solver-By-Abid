@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maze Solver - DFS vs BFS</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#1b1f2a;--mut:#667085;--wall:#2b2f3a;--open:#fff;--vis:#bcd7ff;--path:#ffb703;--s:#2a9d8f;--e:#e63946;--ac:#4361ee;--bd:#dde1ea}
+@media(prefers-color-scheme:dark){:root{--bg:#12141a;--card:#1b1e27;--tx:#eceff6;--mut:#9aa3b5;--wall:#05060a;--open:#262a36;--vis:#2b4a85;--path:#ffb703;--bd:#323746}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--tx);padding:16px}
+.wrap{max-width:900px;margin:auto}
+h1{font-size:1.4rem;margin:0 0 4px}p.sub{margin:0 0 14px;color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer}
+button.p{background:var(--ac);color:#fff;border-color:var(--ac)}button:hover{filter:brightness(.93)}
+label{color:var(--mut);font-size:.9rem}
+#cv{display:block;width:100%;height:auto;border-radius:8px;cursor:crosshair;touch-action:none}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.st b{display:block;font-size:1.05rem}.st span{color:var(--mut);font-size:.9rem}
+.lg{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--mut);margin-top:8px}
+.lg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px;border:1px solid var(--bd)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Maze Solver: DFS vs BFS</h1>
+<p class="sub">DFS explores a path. BFS finds the shortest path in an unweighted maze. Click or drag on the maze to draw or erase walls.</p>
+<div class="card bar">
+<button class="p" onclick="run('dfs')">Run DFS</button>
+<button class="p" onclick="run('bfs')">Run BFS</button>
+<button onclick="clearSearch()">Clear path</button>
+<button onclick="newMaze(true)">New maze (with loops)</button>
+<button onclick="newMaze(false)">New perfect maze</button>
+<label>Speed <input id="sp" type="range" min="1" max="60" value="25"></label>
+</div>
+<div class="card"><canvas id="cv"></canvas>
+<div class="lg"><span><i style="background:var(--s)"></i>Start</span><span><i style="background:var(--e)"></i>End</span><span><i style="background:var(--wall)"></i>Wall</span><span><i style="background:var(--vis)"></i>Visited</span><span><i style="background:var(--path)"></i>Final path</span></div></div>
+<div class="card stats">
+<div class="st"><span>Algorithm</span><b id="a">-</b></div>
+<div class="st"><span>Status</span><b id="s">Ready</b></div>
+<div class="st"><span>Cells explored</span><b id="x">0</b></div>
+<div class="st"><span>Path length (steps)</span><b id="l">0</b></div>
+</div>
+</div>
+<script>
+var R=21,C=33,Z=24,g=[],cv=document.getElementById('cv'),cx=cv.getContext('2d'),timer=null;
+var D=[[-1,0],[0,1],[1,0],[0,-1]],vis=[],path=[],busy=false;
+cv.width=C*Z;cv.height=R*Z;
+function col(n){return getComputedStyle(document.documentElement).getPropertyValue(n)}
+function newMaze(loops){stop();g=[];for(var r=0;r<R;r++){g.push([]);for(var c=0;c<C;c++)g[r].push(1)}
+ (function carve(r,c){g[r][c]=0;var d=[[-2,0],[0,2],[2,0],[0,-2]].sort(function(){return Math.random()-.5});
+  d.forEach(function(v){var nr=r+v[0],nc=c+v[1];if(nr>0&&nr<R-1&&nc>0&&nc<C-1&&g[nr][nc]){g[r+v[0]/2][c+v[1]/2]=0;carve(nr,nc)}})})(1,1);
+ if(loops){for(var k=0;k<40;k++){var r=1+Math.floor(Math.random()*(R-2)),c=1+Math.floor(Math.random()*(C-2));
+  if(g[r][c]&&((!g[r-1][c]&&!g[r+1][c])||(!g[r][c-1]&&!g[r][c+1])))g[r][c]=0}}
+ clearSearch()}
+function stop(){clearInterval(timer);busy=false}
+function clearSearch(){stop();vis=[];path=[];info('-','Ready',0,0);draw()}
+function info(a,s,x,l){document.getElementById('a').textContent=a;document.getElementById('s').textContent=s;document.getElementById('x').textContent=x;document.getElementById('l').textContent=l}
+function draw(){cx.clearRect(0,0,cv.width,cv.height);
+ for(var r=0;r<R;r++)for(var c=0;c<C;c++){cx.fillStyle=g[r][c]?col('--wall'):col('--open');cx.fillRect(c*Z,r*Z,Z,Z)}
+ cx.fillStyle=col('--vis');vis.forEach(function(p){cx.fillRect(p[1]*Z+1,p[0]*Z+1,Z-2,Z-2)});
+ cx.fillStyle=col('--path');path.forEach(function(p){cx.fillRect(p[1]*Z+3,p[0]*Z+3,Z-6,Z-6)});
+ cx.fillStyle=col('--s');cx.fillRect(Z+2,Z+2,Z-4,Z-4);cx.fillStyle=col('--e');cx.fillRect((C-2)*Z+2,(R-2)*Z+2,Z-4,Z-4)}
+function search(kind){var order=[],par={},seen={},k=function(r,c){return r*C+c},found=false,er=R-2,ec=C-2;
+ if(kind=='bfs'){var q=[[1,1]];seen[k(1,1)]=1;
+  while(q.length){var p=q.shift();order.push(p);if(p[0]==er&&p[1]==ec){found=true;break}
+   D.forEach(function(d){var nr=p[0]+d[0],nc=p[1]+d[1];if(!g[nr][nc]&&!seen[k(nr,nc)]){seen[k(nr,nc)]=1;par[k(nr,nc)]=p;q.push([nr,nc])}})}}
+ else{var st=[[1,1,0]];seen[k(1,1)]=1;order.push([1,1]);
+  if(1==er&&1==ec)found=true;
+  while(st.length&&!found){var t=st[st.length-1];
+   if(t[2]>=4){st.pop();continue}
+   var d=D[t[2]++],nr=t[0]+d[0],nc=t[1]+d[1];
+   if(!g[nr][nc]&&!seen[k(nr,nc)]){seen[k(nr,nc)]=1;par[k(nr,nc)]=[t[0],t[1]];order.push([nr,nc]);st.push([nr,nc,0]);if(nr==er&&nc==ec)found=true}}}
+ var pt=[];if(found){var p=[er,ec];while(p){pt.push(p);p=par[k(p[0],p[1])]}pt.reverse()}
+ return{order:order,path:pt,found:found}}
+function run(kind){stop();vis=[];path=[];var res=search(kind),i=0,name=kind=='dfs'?'DFS':'BFS';busy=true;
+ timer=setInterval(function(){var n=Math.max(1,Math.round(document.getElementById('sp').value/4));
+  for(var j=0;j<n&&i<res.order.length;j++)vis.push(res.order[i++]);
+  info(name,'Searching...',vis.length,0);
+  if(i>=res.order.length){stop();path=res.path;info(name,res.found?'Path found':'No path',vis.length,res.found?path.length-1:0)}
+  draw()},30)}
+function edit(e){if(busy)return;var b=cv.getBoundingClientRect(),c=Math.floor((e.clientX-b.left)/b.width*C),r=Math.floor((e.clientY-b.top)/b.height*R);
+ if(r<1||c<1||r>R-2||c>C-2||(r==1&&c==1)||(r==R-2&&c==C-2))return;
+ if(!edit.m)edit.m=g[r][c]?'open':'wall';g[r][c]=edit.m=='wall'?1:0;vis=[];path=[];draw()}
+cv.addEventListener('pointerdown',function(e){edit.m=null;cv.setPointerCapture(e.pointerId);edit.on=true;edit(e)});
+cv.addEventListener('pointermove',function(e){if(edit.on)edit(e)});
+cv.addEventListener('pointerup',function(){edit.on=false});
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',draw);
+newMaze(true);
+</script>
+</body>
+</html>
